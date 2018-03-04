@@ -8,8 +8,9 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import visdom
 
-viz = visdom.Visdom()
+NUM_MODEL = 20
 
+viz = visdom.Visdom()
 data_train = MNIST('./pytorch_data/mnist',
                    download=True,
                    transform=transforms.Compose([
@@ -24,9 +25,12 @@ data_test = MNIST('./pytorch_data/mnist',
 data_train_loader = DataLoader(data_train, batch_size=256, shuffle=True, num_workers=8)
 data_test_loader = DataLoader(data_test, batch_size=1024, num_workers=8)
 
-net = LeNet5()
+net_ls = []
+for i in range(NUM_MODEL):
+    net_ls.append(LeNet5())
+
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(net.parameters(), lr=2e-3)
+optimizer = optim.Adam(net_ls[0].parameters(), lr=2e-3)
 
 cur_batch_win = None
 cur_batch_win_opts = {
@@ -38,7 +42,7 @@ cur_batch_win_opts = {
 }
 
 
-def train(epoch):
+def train(epoch, net=None, model_idx=0):
     global cur_batch_win
     net.train()
     loss_list, batch_list = [], []
@@ -55,7 +59,7 @@ def train(epoch):
         batch_list.append(i+1)
 
         if i % 10 == 0:
-            print('Train - Epoch %d, Batch: %d, Loss: %f' % (epoch, i, loss.data[0]))
+            print('Train - Model %d, Epoch %d, Batch: %d, Loss: %f' % (model_idx, epoch, i, loss.data[0]))
 
         # Update Visualization
         if viz.check_connection():
@@ -68,7 +72,7 @@ def train(epoch):
         optimizer.step()
 
 
-def test():
+def test(net=None):
     net.eval()
     total_correct = 0
     avg_loss = 0.0
@@ -83,14 +87,17 @@ def test():
     print('Test Avg. Loss: %f, Accuracy: %f' % (avg_loss.data[0], float(total_correct) / len(data_test)))
 
 
-def train_and_test(epoch):
-    train(epoch)
-    test()
+def train_and_test(epoch, net, model_idx=0):
+    train(epoch, net, model_idx)
+    test(net)
 
 
 def main():
-    for e in range(1, 16):
-        train_and_test(e)
+    for model_idx in range(NUM_MODEL):
+        for e in range(1, 16):
+            train_and_test(e, net_ls[model_idx], model_idx)
+        net_name = "models/LeNet-" + str(model_idx) + ".pt"
+        torch.save(net_ls[model_idx].state_dict(), net_name)
 
 
 if __name__ == '__main__':
