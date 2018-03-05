@@ -1,0 +1,31 @@
+####  PBS preamble
+
+#PBS -N AA
+#PBS -M kojimano@umich.edu
+#PBS -m abe
+
+#PBS -A jiadeng_fluxoe
+#PBS -l qos=flux
+#PBS -q fluxoe
+#PBS -l advres=jiadeng_debug
+
+#PBS -l nodes=1:ppn=1:gpus=1,mem=6gb
+#PBS -l walltime=02:00:00
+#PBS -j oe
+#PBS -V
+#PBS -d /home/kojimano/Adverserial_attack/Ensemble_Sampling_to_Prevent_Adversarial_Attack
+
+####  End PBS preamble
+
+if [ -s "$PBS_NODEFILE" ] ; then
+    echo "Running on"
+    cat $PBS_NODEFILE
+fi
+
+if [ -d "$PBS_O_WORKDIR" ] ; then
+    cd $PBS_O_WORKDIR
+    echo "Running from $PBS_O_WORKDIR"
+fi
+
+#  Put your job commands after this line
+echo "Hello, world."

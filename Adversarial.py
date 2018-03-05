@@ -68,13 +68,17 @@ def Defender(images, labels, net_ls, logic="mult", sample="all", param_sample=No
         assert(False)
     if sample not in ["single", "all", "random"]:
         assert(False)
-
-    labels = Variable(torch.from_numpy(np.array([labels]).astype(np.int)))
+    if torch.cuda.is_available():
+        labels = Variable(torch.from_numpy(np.array([labels]).astype(np.int)).cuda())
+    else:
+        labels = Variable(torch.from_numpy(np.array([labels]).astype(np.int)))
     total_correct = 0
     if logic == "mult":
         output = Variable(torch.ones((1,10)))
     elif logic == "avg":
         output = Variable(torch.zeros((1,10)))
+    if torch.cuda.is_available():
+	output = output.cuda()
     else:
         assert(False)
     if sample == "all":
@@ -119,6 +123,7 @@ def main():
     defender_total_correct = 0
     attacker_net_ls = []
     for model_idx in range(NUM_MODEL-DEVIDE):
+
         attacker_net_ls.append(LeNet5())
     for model_idx in range(NUM_MODEL-DEVIDE):
         net_name = "models/LeNet-" + str(model_idx) + ".pt"
@@ -128,7 +133,10 @@ def main():
     # Load Defender Nets
     defender_net_ls = []
     for model_idx in range(NUM_MODEL-DEVIDE):
-        defender_net_ls.append(LeNet5())
+	net = LeNet5()
+	if torch.cuda.is_available():
+            net = net.cuda()
+        defender_net_ls.append(net)
     for model_idx in range(NUM_MODEL-DEVIDE):
         net_name = "models/LeNet-" + str(model_idx + DEVIDE) + ".pt"
         torch.load(net_name, defender_net_ls[model_idx].state_dict())
@@ -140,7 +148,10 @@ def main():
             label[:,raw_label] = 1
             label = label.astype(np.float32)
             raw_image = torch.unsqueeze(raw_image, 0)
-            images, labels = Variable(raw_image, requires_grad=True), Variable(torch.from_numpy(label), requires_grad=False)
+            if torch.cuda.is_available():
+                images, labels = Variable(raw_image.cuda(), requires_grad=True), Variable(torch.from_numpy(label).cuda(), requires_grad=False)
+	    else:
+                images, labels = Variable(raw_image, requires_grad=True), Variable(torch.from_numpy(label), requires_grad=False)
             adv_img = Attacker(images, labels, attacker_net_ls, num_steps =100, ganma=0)
             total_sample += 1
             attacker_total_correct += Defender(adv_img, raw_label, attacker_net_ls, logic=args.attacker_logic)
