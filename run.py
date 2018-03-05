@@ -12,7 +12,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import visdom
 
-NUM_MODEL = 6
+NUM_MODEL = 20
 
 viz = visdom.Visdom()
 data_train = MNIST('./pytorch_data/mnist',
@@ -34,7 +34,6 @@ for i in range(NUM_MODEL):
     net_ls.append(LeNet5())
 
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(net_ls[0].parameters(), lr=2e-3)
 
 cur_batch_win = None
 cur_batch_win_opts = {
@@ -50,6 +49,8 @@ def train(epoch, net=None, model_idx=0):
     global cur_batch_win
     net.train()
     loss_list, batch_list = [], []
+    optimizer = optim.Adam(net.parameters(), lr=2e-3)
+
     for i, (images, labels) in enumerate(data_train_loader):
         images, labels = Variable(images), Variable(labels)
 
@@ -100,7 +101,7 @@ def main():
     for model_idx in range(NUM_MODEL):
         for e in range(1, 16):
             train_and_test(e, net_ls[model_idx], model_idx)
-        net_name = "models/LeNet-" + str(model_idx+13) + ".pt"
+        net_name = "models/LeNet-" + str(model_idx) + ".pt"
         torch.save(net_ls[model_idx].state_dict(), net_name)
 
 
