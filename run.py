@@ -1,3 +1,7 @@
+"""
+Credit :  https://github.com/activatedgeek/LeNet-5
+Note: Some modification has been done on the code provided above URL
+"""
 from lenet import LeNet5
 import torch
 import torch.nn as nn
@@ -8,7 +12,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import visdom
 
-NUM_MODEL = 20
+NUM_MODEL = 6
 
 viz = visdom.Visdom()
 data_train = MNIST('./pytorch_data/mnist',
@@ -96,7 +100,7 @@ def main():
     for model_idx in range(NUM_MODEL):
         for e in range(1, 16):
             train_and_test(e, net_ls[model_idx], model_idx)
-        net_name = "models/LeNet-" + str(model_idx) + ".pt"
+        net_name = "models/LeNet-" + str(model_idx+13) + ".pt"
         torch.save(net_ls[model_idx].state_dict(), net_name)
 
 
