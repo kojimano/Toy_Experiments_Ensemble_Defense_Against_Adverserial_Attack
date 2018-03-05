@@ -9,12 +9,11 @@ from torch.autograd import Variable
 from torchvision.datasets.mnist import MNIST
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
-import visdom
 import copy
 import os
 import numpy as np
 import argparse
-from IPython import embed
+#from IPython import embed
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--num_attacker_clone',  type=int, default=1, help='an integer for the accumulator')
@@ -44,6 +43,9 @@ def Attacker(images, labels, net_ls, num_steps =100, ganma=0, sample="all"):
   optimizer = optim.Adam([images], lr=8)
   alpha = Variable(torch.from_numpy(np.array([1. / len(net_ls)]).astype(np.float32)), requires_grad=False)
   raw_loss = Variable(torch.zeros(labels.size()), requires_grad=False)
+  if torch.cuda.is_available():
+      alpha = alpha.cuda()
+      raw_loss = raw_loss.cuda()
   for i in range(num_steps):
       optimizer.zero_grad()
       loss = Variable(torch.zeros(1), requires_grad=False)
@@ -101,7 +103,10 @@ def Defender(images, labels, net_ls, logic="mult", sample="all", param_sample=No
     elif sample == "random":
         sample_num = np.random.randint(len(net_ls), size=1)
         sample_indcies = np.random.randint(len(net_ls), size=sample_num)
-        net_ls = net_ls[sample_indcies]
+        new_net_ls = []
+        for idx in sample_indcies:
+            new_net_ls.append(net_ls[idx])	
+        net_ls = new_net_ls
         for net in net_ls:
             if logic == "mult":
                 output*=net(images)
@@ -122,7 +127,10 @@ def main():
     defender_total_correct = 0
     attacker_net_ls = []
     for model_idx in range(NUM_MODEL-DEVIDE):
-        attacker_net_ls.append(LeNet5())
+        net = LeNet5()
+        if torch.cuda.is_available():
+            net = net.cuda()
+        attacker_net_ls.append(net)
     for model_idx in range(NUM_MODEL-DEVIDE):
         net_name = "models/LeNet-" + str(model_idx) + ".pt"
         torch.load(net_name, attacker_net_ls[model_idx].state_dict())
@@ -149,7 +157,7 @@ def main():
                 images, labels = Variable(raw_image.cuda(), requires_grad=True), Variable(torch.from_numpy(label).cuda(), requires_grad=False)
             else:
                 images, labels = Variable(raw_image, requires_grad=True), Variable(torch.from_numpy(label), requires_grad=False)
-            adv_img = Attacker(images, labels, attacker_net_ls, num_steps =100, ganma=0)
+            adv_img = Attacker(images, labels, attacker_net_ls, num_steps=100, ganma=0)
             total_sample += 1
             attacker_total_correct += Defender(adv_img, raw_label, attacker_net_ls, logic=args.attacker_logic, sample=args.attacker_sample)
             defender_total_correct += Defender(adv_img, raw_label, defender_net_ls, logic=args.defender_logic, sample=args.defender_sample)
