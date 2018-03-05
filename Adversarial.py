@@ -16,13 +16,15 @@ import numpy as np
 import argparse
 from IPython import embed
 
+parser = argparse.ArgumentParser()
 parser.add_argument('--num_attacker_clone',  type=int, default=1, help='an integer for the accumulator')
 parser.add_argument('--num_defender_clone',  type=int, default=1, help='an integer for the accumulator')
-parser.add_argument('--attacker_logic',  type=string, default="mult", help='an integer for the accumulator')
-parser.add_argument('--atacker_sample',  type=string, default="all", help='an integer for the accumulator')
-parser.add_argument('--defender_logic',  type=string, default="mult", help='an integer for the accumulator')
-parser.add_argument('--defender_sample',  type=string, default="all", help='an integer for the accumulator')
+parser.add_argument('--attacker_logic',  type=str, default="avg", help='an integer for the accumulator')
+parser.add_argument('--attacker_sample',  type=str, default="all", help='an integer for the accumulator')
+parser.add_argument('--defender_logic',  type=str, default="mult", help='an integer for the accumulator')
+parser.add_argument('--defender_sample',  type=str, default="all", help='an integer for the accumulator')
 args = parser.parse_args()
+print()
 
 NUM_MODEL = args.num_attacker_clone + args.num_defender_clone
 DEVIDE = args.num_attacker_clone
@@ -50,7 +52,7 @@ def Attacker(images, labels, net_ls, num_steps =100, ganma=0, sample="all"):
               output = alpha*net(images)*labels
               raw_loss += output
       elif sample == "single":
-          net_idx = np.random.randint(len(net_ls), size=1)
+          net_idx = np.random.randint(len(net_ls), size=1)[0]
           net = net_ls[net_idx]
           alpha = 1.0
           output = alpha*net(images)*labels
@@ -58,7 +60,6 @@ def Attacker(images, labels, net_ls, num_steps =100, ganma=0, sample="all"):
       loss = torch.sum(raw_loss)
       loss += ganma  / float(images.size()[2] * images.size()[2]) * torch.sum((orig_images-images) ** 2) # TODO: devide by the shape of
       loss.backward(retain_graph=True)
-      #print("Iter {} Loss {}".format(i, loss))
       optimizer.step()
   return images
 
@@ -68,19 +69,18 @@ def Defender(images, labels, net_ls, logic="mult", sample="all", param_sample=No
         assert(False)
     if sample not in ["single", "all", "random"]:
         assert(False)
-    if torch.cuda.is_available():
-        labels = Variable(torch.from_numpy(np.array([labels]).astype(np.int)).cuda())
-    else:
-        labels = Variable(torch.from_numpy(np.array([labels]).astype(np.int)))
     total_correct = 0
     if logic == "mult":
         output = Variable(torch.ones((1,10)))
     elif logic == "avg":
         output = Variable(torch.zeros((1,10)))
-    if torch.cuda.is_available():
-	output = output.cuda()
     else:
         assert(False)
+    if torch.cuda.is_available():
+        labels = Variable(torch.from_numpy(np.array([labels]).astype(np.int)).cuda())
+        output = output.cuda()
+    else:
+        labels = Variable(torch.from_numpy(np.array([labels]).astype(np.int)))
     if sample == "all":
         for net in net_ls:
             if logic == "mult":
@@ -90,7 +90,7 @@ def Defender(images, labels, net_ls, logic="mult", sample="all", param_sample=No
             else:
                 assert(False)
     elif sample == "single":
-        net_idx = np.random.randint(len(net_ls), size=1)
+        net_idx = np.random.randint(len(net_ls), size=1)[0]
         net = net_ls[net_idx]
         if logic == "mult":
             output*=net(images)
@@ -110,7 +110,6 @@ def Defender(images, labels, net_ls, logic="mult", sample="all", param_sample=No
             else:
                 assert(False)
 
-    embed()
     pred = output.data.max(1)[1]
     total_correct += pred.eq(labels.data.view_as(pred)).sum()
     return total_correct
@@ -123,7 +122,6 @@ def main():
     defender_total_correct = 0
     attacker_net_ls = []
     for model_idx in range(NUM_MODEL-DEVIDE):
-
         attacker_net_ls.append(LeNet5())
     for model_idx in range(NUM_MODEL-DEVIDE):
         net_name = "models/LeNet-" + str(model_idx) + ".pt"
@@ -133,32 +131,34 @@ def main():
     # Load Defender Nets
     defender_net_ls = []
     for model_idx in range(NUM_MODEL-DEVIDE):
-	net = LeNet5()
-	if torch.cuda.is_available():
+        net = LeNet5()
+        if torch.cuda.is_available():
             net = net.cuda()
         defender_net_ls.append(net)
     for model_idx in range(NUM_MODEL-DEVIDE):
         net_name = "models/LeNet-" + str(model_idx + DEVIDE) + ".pt"
         torch.load(net_name, defender_net_ls[model_idx].state_dict())
-
-    for i, (images, labels) in enumerate(data_test_loader):
-        print("Itreation: {} ....".format(i))
-        for raw_image, raw_label in zip(images, labels):
+    ct = 0
+    for i, (batch_images, batch_labels) in enumerate(data_test_loader):
+        for raw_image, raw_label in zip(batch_images, batch_labels):
             label = np.zeros((1,10))
             label[:,raw_label] = 1
             label = label.astype(np.float32)
             raw_image = torch.unsqueeze(raw_image, 0)
             if torch.cuda.is_available():
                 images, labels = Variable(raw_image.cuda(), requires_grad=True), Variable(torch.from_numpy(label).cuda(), requires_grad=False)
-	    else:
+            else:
                 images, labels = Variable(raw_image, requires_grad=True), Variable(torch.from_numpy(label), requires_grad=False)
             adv_img = Attacker(images, labels, attacker_net_ls, num_steps =100, ganma=0)
             total_sample += 1
-            attacker_total_correct += Defender(adv_img, raw_label, attacker_net_ls, logic=args.attacker_logic)
+            attacker_total_correct += Defender(adv_img, raw_label, attacker_net_ls, logic=args.attacker_logic, sample=args.attacker_sample)
             defender_total_correct += Defender(adv_img, raw_label, defender_net_ls, logic=args.defender_logic, sample=args.defender_sample)
+            ct += 1
+            if ct % 10 == 1:
+                print("Itreation: {}, Attacker Acc: {},  Defender Acc: {}".format(ct, attacker_total_correct / float(total_sample), defender_total_correct / float(total_sample)))
 
-    print("Total Accuracy on Attacker Nertwork {}". format(attacker_total_correct / float(total_correct)))
-    print("Total Accuracy on Defender Nertwork {}". format(defender_total_correct / float(total_correct)))
+    print("Total Accuracy on Attacker Nertwork {}". format(attacker_total_correct / float(total_sample)))
+    print("Total Accuracy on Defender Nertwork {}". format(defender_total_correct / float(total_sample)))
 
 if __name__ == '__main__':
     main()
