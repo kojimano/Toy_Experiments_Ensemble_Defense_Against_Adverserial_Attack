@@ -10,7 +10,7 @@ from torch.autograd import Variable
 from torchvision.datasets.mnist import MNIST
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
-import visdom
+#import visdom
 
 NUM_MODEL = 20
 

@@ -1,5 +1,6 @@
-
-
+"""
+Implementation of Adverserial Attack/Defense Experiments
+"""
 from lenet import LeNet5
 import torch
 import torch.nn as nn
@@ -12,10 +13,19 @@ import visdom
 import copy
 import os
 import numpy as np
+import argparse
 from IPython import embed
 
-NUM_MODEL = 2
-DEVIDE = 1
+parser.add_argument('--num_attacker_clone',  type=int, default=1, help='an integer for the accumulator')
+parser.add_argument('--num_defender_clone',  type=int, default=1, help='an integer for the accumulator')
+parser.add_argument('--attacker_logic',  type=string, default="mult", help='an integer for the accumulator')
+parser.add_argument('--atacker_sample',  type=string, default="all", help='an integer for the accumulator')
+parser.add_argument('--defender_logic',  type=string, default="mult", help='an integer for the accumulator')
+parser.add_argument('--defender_sample',  type=string, default="all", help='an integer for the accumulator')
+args = parser.parse_args()
+
+NUM_MODEL = args.num_attacker_clone + args.num_defender_clone
+DEVIDE = args.num_attacker_clone
 
 data_test = MNIST('./pytorch_data/mnist',
                   train=False,
@@ -26,7 +36,7 @@ data_test = MNIST('./pytorch_data/mnist',
 data_test_loader = DataLoader(data_test, batch_size=1024, num_workers=8)
 
 # TODO: check wether the precidction is correct label
-def Attacker(images, labels, net_ls, num_steps =100, ganma=0):
+def Attacker(images, labels, net_ls, num_steps =100, ganma=0, sample="all"):
   orig_images = copy.deepcopy(images)
   orig_images.requires_grad = False # TODO: fix
   optimizer = optim.Adam([images], lr=8)
@@ -35,7 +45,14 @@ def Attacker(images, labels, net_ls, num_steps =100, ganma=0):
   for i in range(num_steps):
       optimizer.zero_grad()
       loss = Variable(torch.zeros(1), requires_grad=False)
-      for net in net_ls:
+      if sample == "all":
+          for net in net_ls:
+              output = alpha*net(images)*labels
+              raw_loss += output
+      elif sample == "single":
+          net_idx = np.random.randint(len(net_ls), size=1)
+          net = net_ls[net_idx]
+          alpha = 1.0
           output = alpha*net(images)*labels
           raw_loss += output
       loss = torch.sum(raw_loss)
@@ -45,13 +62,50 @@ def Attacker(images, labels, net_ls, num_steps =100, ganma=0):
       optimizer.step()
   return images
 
+# TODO: Add options to do parameter ensemble
+def Defender(images, labels, net_ls, logic="mult", sample="all", param_sample=None):
+    if logic not in ["mult", "avg"]:
+        assert(False)
+    if sample not in ["single", "all", "random"]:
+        assert(False)
 
-def Defender(images, labels, net_ls):
     labels = Variable(torch.from_numpy(np.array([labels]).astype(np.int)))
     total_correct = 0
-    output = Variable(torch.ones((1,10)))
-    for net in net_ls:
-        output*=net(images) # TODO: multiplication
+    if logic == "mult":
+        output = Variable(torch.ones((1,10)))
+    elif logic == "avg":
+        output = Variable(torch.zeros((1,10)))
+    else:
+        assert(False)
+    if sample == "all":
+        for net in net_ls:
+            if logic == "mult":
+                output*=net(images)
+            elif logic == "avg":
+                output+=net(images)
+            else:
+                assert(False)
+    elif sample == "single":
+        net_idx = np.random.randint(len(net_ls), size=1)
+        net = net_ls[net_idx]
+        if logic == "mult":
+            output*=net(images)
+        elif logic == "avg":
+            output+=net(images)
+        else:
+            assert(False)
+    elif sample == "random":
+        sample_num = np.random.randint(len(net_ls), size=1)
+        sample_indcies = np.random.randint(len(net_ls), size=sample_num)
+        net_ls = net_ls[sample_indcies]
+        for net in net_ls:
+            if logic == "mult":
+                output*=net(images)
+            elif logic == "avg":
+                output+=net(images)
+            else:
+                assert(False)
+
     embed()
     pred = output.data.max(1)[1]
     total_correct += pred.eq(labels.data.view_as(pred)).sum()
@@ -80,8 +134,8 @@ def main():
         torch.load(net_name, defender_net_ls[model_idx].state_dict())
 
     for i, (images, labels) in enumerate(data_test_loader):
+        print("Itreation: {} ....".format(i))
         for raw_image, raw_label in zip(images, labels):
-            print("Sample  Image:")
             label = np.zeros((1,10))
             label[:,raw_label] = 1
             label = label.astype(np.float32)
@@ -89,8 +143,8 @@ def main():
             images, labels = Variable(raw_image, requires_grad=True), Variable(torch.from_numpy(label), requires_grad=False)
             adv_img = Attacker(images, labels, attacker_net_ls, num_steps =100, ganma=0)
             total_sample += 1
-            attacker_total_correct += Defender(adv_img, raw_label, attacker_net_ls)
-            defender_total_correct += Defender(adv_img, raw_label, defender_net_ls)
+            attacker_total_correct += Defender(adv_img, raw_label, attacker_net_ls, logic=args.attacker_logic)
+            defender_total_correct += Defender(adv_img, raw_label, defender_net_ls, logic=args.defender_logic, sample=args.defender_sample)
 
     print("Total Accuracy on Attacker Nertwork {}". format(attacker_total_correct / float(total_correct)))
     print("Total Accuracy on Defender Nertwork {}". format(defender_total_correct / float(total_correct)))
