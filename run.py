@@ -14,7 +14,7 @@ import visdom
 
 NUM_MODEL = 20
 
-viz = visdom.Visdom()
+#viz = visdom.Visdom()
 data_train = MNIST('./pytorch_data/mnist',
                    download=True,
                    transform=transforms.Compose([
@@ -67,11 +67,13 @@ def train(epoch, net=None, model_idx=0):
             print('Train - Model %d, Epoch %d, Batch: %d, Loss: %f' % (model_idx, epoch, i, loss.data[0]))
 
         # Update Visualization
+        """
         if viz.check_connection():
             cur_batch_win = viz.line(torch.FloatTensor(loss_list), torch.FloatTensor(batch_list),
                                      win=cur_batch_win, name='current_batch_loss',
                                      update=(None if cur_batch_win is None else 'replace'),
                                      opts=cur_batch_win_opts)
+        """
 
         loss.backward()
         optimizer.step()
