@@ -31,5 +31,7 @@ See epoch train loss live graph at [`http://localhost:8097`](http://localhost:80
 
 ## References
 [[1](http://yann.lecun.com/exdb/publis/pdf/lecun-98.pdf)] Our Technical Report
+
 [[2](http://yann.lecun.com/exdb/publis/pdf/lecun-98.pdf)] Y. LeCun, L. Bottou, Y. Bengio, and P. Haffner. "Gradient-based learning applied to document recognition." Proceedings of the IEEE, 86(11):2278-2324, November 1998.
-[[3](http://yann.lecun.com/exdb/publis/pdf/lecun-98.pdf)]
+
+[[3](https://arxiv.org/pdf/1611.02770)] Liu, Y., Chen, X., Liu, C., & Song, D. (2016). Delving into transferable adversarial examples and black-box attacks. arXiv preprint arXiv:1611.02770.
